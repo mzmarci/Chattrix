@@ -35,9 +35,13 @@ jobs:
         sudo chmod +x /usr/local/bin/docker-compose
         docker-compose version
 
+    - name: List repo contents
+      run: ls -R
+    
+
     - name: Build Images from docker-compose
       run: |
-        cd mattermost/server/build
+        cd AWS/mattermost/server/build
         docker-compose build     # Runs docker-compose build, which reads docker-compose.yml and builds the images for all services (like frontend, app, db).
 
  
