@@ -41,7 +41,7 @@ jobs:
 
     - name: Build Images from docker-compose
       run: |
-        cd mattermost/server/build
+
         docker-compose build     # Runs docker-compose build, which reads docker-compose.yml and builds the images for all services (like frontend, app, db).
 
  
