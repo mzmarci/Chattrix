@@ -1,0 +1,8 @@
+# List of Python packages to install
+
+fastapi         # Web framework
+uvicorn         # ASGI server to run FastAPI
+sqlalchemy      # ORM to talk to MySQL
+databases       # Async wrapper for database
+mysqlclient     # MySQL database driver
+redis
