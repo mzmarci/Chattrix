@@ -4,6 +4,8 @@
 # .tfstate files
 *.tfstate
 *.tfstate.*
+*.tfvars.*
+*~/.ssh/id_rsa.pub*
 
 # Crash log files
 crash.log

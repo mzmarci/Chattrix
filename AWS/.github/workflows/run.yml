@@ -1,0 +1,83 @@
+name: CI/CD Docker Compose Pipeline
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN  }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  COMPOSE_PROJECT_NAME: Chattrix  # is used to group Docker Compose containers.
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest         
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3     # Pulls code from GitHub so the runner can use it. it also creates a local copy of the repository
+
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v3  # setup envirnoment to install docker. Prepares Docker on the machine to build your images
+
+                                                                     
+    - name: Login to Docker Hub     # # Logs into Docker Hub using secret username and password.
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Install Docker Compose
+      run: |
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.7/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+        docker-compose version
+
+    - name: Build Images from docker-compose
+      run: |
+        cd AWS/mattermost/server/build
+        docker-compose build     # Runs docker-compose build, which reads docker-compose.yml and builds the images for all services (like frontend, app, db).
+
+ 
+    
+     # ✅ Install Trivy
+    - name: Install Trivy
+      run: |
+        sudo apt-get update && sudo apt-get install -y wget
+        wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
+        sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+
+      # ✅ Scan Docker Image with Trivy
+    - name: Run Trivy Scan on Image
+      run: |
+        trivy image --exit-code 1 --severity CRITICAL,HIGH build-opensearch:latest
+
+    - name: Run SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v5.0.0  #sonarsource/sonarqube-scan-action@v2
+      with:
+        projectBaseDir: .
+        args: >
+          -Dsonar.projectKey=my-project-key
+          -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # This is sensitive information — like a password or API token. So it's stored securely as a GitHub secret in repository under: Settings → Secrets and variables → Actions → Secrets. This hides the value from logs and protects it from being exposed.
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  # This is not sensitive. It’s just a regular environment variable — the URL of your SonarQube server. You can define it once at the top of your workflow under env:  SONAR_HOST_URL: "http://your-sonarqube-server:9000"
+
+    - name: Wait for SonarQube Quality Gate
+      id: sonarqube-quality-gate-check
+      uses: sonarsource/sonarqube-quality-gate-action@v1.2.0 #sonarsource/sonarqube-quality-gate-action@master  
+      with:
+        scanTimeout: '300'  # wait max 5 mins
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+    - name: Tag and Push Docker Images
+      run: |
+        docker tag build-opensearch:latest $DOCKERHUB_USERNAME/build-opensearch:latest
+
+        docker push $DOCKERHUB_USERNAME/build-opensearch:latest
